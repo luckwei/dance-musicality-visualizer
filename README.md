@@ -12,6 +12,17 @@ A browser music-and-choreography workspace. Each eight-count phrase has one shar
 
 All modes share the same project; switching modes preserves timing and playback position.
 
+## Start with video, audio, or both
+
+A separate audio file is optional. **Use a video** accepts a YouTube link/search result or an uploaded MP4/WebM. **Add audio (optional)** supports audio-only projects or a companion/fallback track.
+
+- **YouTube alone:** the embedded video's own audio drives playback. The app supports play/pause, seeking, speed, eight-count looping, tap/manual tempo and editable/imported lyric timing. You can press Play before YouTube has reported its duration. YouTube does not expose its audio samples to the app, so automatic waveform/beat/transcription analysis is unavailable without matching accessible audio; nothing is fabricated.
+- **Local video alone:** playback and the timeline use the video element directly. The app decodes its soundtrack for waveform, beat estimates, and transcription where the browser supports the audio codec. Decode failure leaves video playback and manual editing available. It does not play an extra copy of the same soundtrack.
+- **Audio alone:** the uploaded file drives playback and analysis.
+- **Both:** choose **Listen to → Video soundtrack / Uploaded audio / Mix both**. The first loaded source owns the score timeline. Adding fallback audio to a video preserves existing BPM, count 1, lyric edits and position. Align offsets map companion audio and waveform/transcription timestamps to that timeline. Removing uploaded audio returns to the video soundtrack; if needed, existing cues are shifted to the video timeline.
+
+Video-only projects need no hosted backend or API key for link-based playback. A YouTube search key is needed only for search results inside the app. Live streams without a finite duration cannot provide a finite eight-count score.
+
 ## What works locally
 
 Open MP3/WAV or another browser-supported audio format. Decode the actual audio, estimate constant tempo and an initial beat phase, draw phrase waveforms, and play/seek/loop at adjustable speed. Half/double/tap tempo and “Set at playhead” correct dance count 1. Analysis does not establish meter or guarantee the musical downbeat. Variable-tempo recordings still need a future tempo-map editor.
@@ -59,9 +70,10 @@ Browser checks:
 ```sh
 npx playwright install chromium
 npm run test:browser
+npm run test:video
 ```
 
-Or set `BROWSER_PATH` to an installed Chromium executable. The suite uses real synthesized WAV audio, and real MP4/AAC when ffmpeg with libx264 is installed. External-provider responses in the browser smoke test are explicitly mocked. Provider calls also have server-side contract tests with injected fetch; these do not establish live credentials or model quality.
+Or set `BROWSER_PATH` to an installed Chromium executable. The suite uses real synthesized WAV audio, and real MP4/AAC when ffmpeg with libx264 is installed. The video-source suite checks late YouTube metadata, buffering, optional fallback attachment/removal, and local-video-only playback. Its YouTube IFrame API is mocked, so it validates app integration rather than live embed availability. External-provider responses in the browser smoke test are explicitly mocked. Provider calls also have server-side contract tests with injected fetch; these do not establish live credentials or model quality.
 
 ## GitHub Pages
 

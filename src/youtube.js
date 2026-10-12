@@ -214,7 +214,7 @@ function element(tag, className, text) {
 
 export function mountYouTube(container, { onSelect = () => {}, onError = () => {}, onStateChange = () => {}, searchProvider } = {}) {
   const root = element('div', 'youtube-panel');
-  const hint = element('p', 'helper', 'Search for choreography or paste a YouTube video link. Upload the matching song to analyse its waveform and beats; YouTube audio cannot be analysed from the embedded player.');
+  const hint = element('p', 'helper', 'Search or paste a YouTube video. Its own audio is enough to play, count, loop, and time lyrics. A separate audio file is optional for waveform analysis and automatic transcription.');
   const keyDetails = element('details', 'youtube-key');
   const keySummary = element('summary', '', 'Set up YouTube search');
   const keyLabel = element('label', 'field-label', 'YouTube Data API key');
@@ -257,11 +257,11 @@ export function mountYouTube(container, { onSelect = () => {}, onError = () => {
     try {
       const loaded = await player.load(id);
       if (!loaded || destroyed || sequence !== loadSequence) return false;
-      const title = typeof video === 'object' ? video.title || 'YouTube choreography' : 'YouTube choreography';
+      const title = typeof video === 'object' ? video.title || 'YouTube video' : 'YouTube video';
       selectedTitle.textContent = title;
       pasteInput.value = `https://www.youtube.com/watch?v=${id}`;
       watchLink.href = pasteInput.value; watchLink.hidden = false;
-      status.textContent = 'Video ready. Use the audio offset to match the choreography to your song.';
+      status.textContent = 'Video ready. Press Play to use its own audio. No separate audio upload is required.';
       onSelect({ id, title });
       return true;
     } catch (error) {
