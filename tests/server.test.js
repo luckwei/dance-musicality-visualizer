@@ -200,3 +200,29 @@ test('personal JEV key is isolated from other provider keys and unknown decision
   const response=await fetch(`${base}/api/review`,{method:'POST',headers:{Authorization:'Bearer personal-jev','Content-Type':'application/json'},body:JSON.stringify({hasAudio:true,hasVideo:true,bpm:120,syllableCount:0,beatConfidence:.5,note:''})});
   assert.equal(response.status,502);assert.match((await response.json()).error,/unrecognized/);
 });
+
+test('downloads require explicit enablement and app token before invoking a subprocess', async t => {
+ const post=(base,headers={},body={id:'v1t4MTqdfyI',format:'mp3'})=>fetch(`${base}/api/youtube-download`,{method:'POST',headers:{'Content-Type':'application/json',...headers},body:JSON.stringify(body)});
+ const disabled=await start(t,{downloadImpl:()=>assert.fail('must not download')});assert.equal((await post(disabled,AUTH)).status,503);
+ const enabled=await start(t,{env:{ENABLE_YOUTUBE_DOWNLOADS:'true',APP_ACCESS_TOKEN:HOSTED.APP_ACCESS_TOKEN},downloadImpl:()=>assert.fail('must not download')});
+ assert.equal((await post(enabled)).status,401);assert.equal((await post(enabled,{'X-App-Token':'wrong'})).status,401);
+ for(const body of [null,{id:'http://127.0.0.1/',format:'mp3'},{id:'v1t4MTqdfyI',format:'--exec'},{id:'v1t4MTqdfyI',format:'wav'}])assert.equal((await post(enabled,AUTH,body)).status,400);
+ assert.equal((await post(enabled,AUTH,{id:'a'.repeat(2000),format:'mp3'})).status,413);
+ assert.equal((await fetch(`${enabled}/api/youtube-download`)).status,405);
+ assert.equal((await post(enabled,{...AUTH,Origin:'https://untrusted.example'})).status,403);
+});
+
+test('downloads stream the requested format and clean up after the response',async t=>{
+ const dir=await mkdtemp(join(tmpdir(),'download-api-test-'));t.after(()=>rm(dir,{recursive:true,force:true}));
+ const path=join(dir,'fixture');await writeFile(path,'binary media');let calls=0,cleaned=0,finishCleanup;const cleanupDone=new Promise(resolve=>finishCleanup=resolve);
+ const base=await start(t,{env:{ENABLE_YOUTUBE_DOWNLOADS:'true',APP_ACCESS_TOKEN:HOSTED.APP_ACCESS_TOKEN},downloadImpl:async options=>{
+  assert.equal(options.id,'v1t4MTqdfyI');assert.ok(['mp3','mp4'].includes(options.format));assert.ok(options.signal instanceof AbortSignal);calls++;
+  return {path,size:12,cleanup:async()=>{cleaned++;if(cleaned===2)finishCleanup();}};
+ }});
+ for(const format of ['mp3','mp4']){
+  const response=await fetch(`${base}/api/youtube-download`,{method:'POST',headers:{...AUTH,'Content-Type':'application/json'},body:JSON.stringify({id:'v1t4MTqdfyI',format})});
+  assert.equal(response.status,200);assert.equal(response.headers.get('content-type'),format==='mp3'?'audio/mpeg':'video/mp4');
+  assert.match(response.headers.get('content-disposition'),new RegExp(`youtube-v1t4MTqdfyI\\.${format}`));assert.equal(await response.text(),'binary media');
+ }
+ assert.equal(calls,2);await cleanupDone;assert.equal(cleaned,2);
+});

@@ -1,4 +1,6 @@
 import http from 'node:http';
+import { pipeline } from 'node:stream/promises';
+import { downloadYouTube, DownloadError } from './download.mjs';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
@@ -110,7 +112,7 @@ async function providerJSON(fetchImpl, url, options, timeoutMs, res, service) {
   }
 }
 
-export function createApp({ env = process.env, fetchImpl = globalThis.fetch, distDir = resolve(HERE, '../dist'), limits = {} } = {}) {
+export function createApp({ env = process.env, fetchImpl = globalThis.fetch, distDir = resolve(HERE, '../dist'), limits = {}, downloadImpl = downloadYouTube } = {}) {
   const allowedOrigins = parseOrigins(env.ALLOWED_ORIGINS);
   const maxBytes = limits.maxBytes ?? 25_000_000;
   const bodyTimeoutMs = limits.bodyTimeoutMs ?? 30_000;
@@ -163,6 +165,29 @@ export function createApp({ env = process.env, fetchImpl = globalThis.fetch, dis
         res.writeHead(204, { 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-File-Name, X-App-Token', 'Access-Control-Max-Age': '600' }); res.end(); return;
       }
       if (url.pathname === '/api/health' && req.method === 'GET') { json(res, 200, { ok: true }); return; }
+      if (url.pathname === '/api/youtube-download') {
+        if (req.method !== 'POST') throw new HttpError(405, 'Use POST for downloads.');
+        if (env.ENABLE_YOUTUBE_DOWNLOADS !== 'true') throw new HttpError(503, 'Downloads are not enabled. Connect a backend with yt-dlp, FFmpeg, and ENABLE_YOUTUBE_DOWNLOADS=true.');
+        const credential = configuredCredential(req, 'youtube-download', env.APP_ACCESS_TOKEN);
+        if (String(req.headers['content-type'] || '').split(';')[0] !== 'application/json') throw new HttpError(415, 'Send the video ID and format as JSON.');
+        let input;
+        try { input = JSON.parse((await readBody(req, 1024, bodyTimeoutMs, 'Download requests must be smaller than 1 KB.')).toString()); }
+        catch (error) { if (error instanceof HttpError) throw error; throw new HttpError(400, 'Invalid download request.'); }
+        if (typeof input?.id !== 'string' || !VIDEO_ID.test(input.id) || !['mp3', 'mp4'].includes(input?.format)) throw new HttpError(400, 'Choose a valid YouTube video ID and MP3 or MP4.');
+        rateLimit(req, credential); concurrent++; acquired = true;
+        const controller = new AbortController();
+        const abort = () => controller.abort(); res.once('close', abort);
+        if(res.destroyed)controller.abort();
+        let file;
+        try {
+          file = await downloadImpl({ id: input.id, format: input.format, signal: controller.signal, executable: env.YT_DLP_PATH || 'yt-dlp' });
+          if (res.destroyed) return;
+          res.writeHead(200, { 'Content-Type': input.format === 'mp3' ? 'audio/mpeg' : 'video/mp4', 'Content-Length': file.size,
+            'Content-Disposition': `attachment; filename="youtube-${input.id}.${input.format}"`, 'Cache-Control': 'no-store' });
+          await pipeline(createReadStream(file.path), res);
+        } finally { res.off('close', abort); await file?.cleanup(); }
+        return;
+      }
       if (url.pathname === '/api/transcribe') {
         if (req.method !== 'POST') { res.setHeader('Allow', 'POST'); throw new HttpError(405, 'Use POST for transcription.'); }
         const credential = transcriptionCredential(req, env);
@@ -239,10 +264,12 @@ export function createApp({ env = process.env, fetchImpl = globalThis.fetch, dis
       const stream = createReadStream(path);
       stream.on('error', () => res.destroy()); stream.pipe(res);
     } catch (error) {
-      const status = error instanceof HttpError ? error.status : 500;
+      if (res.headersSent) { res.destroy(); return; }
+      const known = error instanceof HttpError || error instanceof DownloadError;
+      const status = known ? error.status : 500;
       if (status === 413 || status === 408) res.setHeader('Connection', 'close');
       if (status === 429) res.setHeader('Retry-After', '60');
-      json(res, status, { error: error instanceof HttpError ? error.message : 'The service could not complete this request.' });
+      json(res, status, { error: known ? error.message : 'The service could not complete this request.' });
     } finally {
       if (acquired) concurrent--;
     }

@@ -39,7 +39,7 @@ Choose one authentication mode for transcription:
 - **Hosted key:** send `X-App-Token` matching `APP_ACCESS_TOKEN`. The server uses its `OPENAI_API_KEY` and refuses requests if either server setting is absent.
 - **Personal key:** send `Authorization: Bearer PERSONAL_OPENAI_KEY`. This request uses that personal key instead of the server key and does not require the shared app token. The key stays in request memory and is sent only to the fixed OpenAI endpoint. Use HTTPS outside local development.
 
-`GET /api/youtube-search?q=choreography` requires `X-App-Token` and a configured `YOUTUBE_API_KEY`. It returns `{"videos":[{"id":"...","title":"...","channel":"...","thumbnail":"..."}]}` using YouTube's official embeddable/syndicated-video search. This service never downloads YouTube audio or video.
+`GET /api/youtube-search?q=choreography` requires `X-App-Token` and a configured `YOUTUBE_API_KEY`. It returns `{"videos":[{"id":"...","title":"...","channel":"...","thumbnail":"..."}]}` using YouTube's official embeddable/syndicated-video search. Search does not download media; optional downloads use the separate endpoint below.
 
 Errors use `{"error":"Human-readable message"}` with HTTP 400/401/403/405/408/413/415/422/429/502/503/504 as appropriate. Provider messages are redacted, and the server does not log request bodies, keys, filenames, queries, or provider responses. CORS permits only same-host origins and `ALLOWED_ORIGINS`; server-to-server requests without an Origin header still require normal authentication.
 
@@ -50,3 +50,25 @@ Run `node --test tests/server.test.js` to validate authentication, CORS, size/ra
 Add `TYPESAFE_API_KEY` in the backend host's Environment settings (or let a user supply a personal TypeSafe key for one request). `TYPESAFE_MODEL` optionally overrides `jev-latest`. A shared key requires `APP_ACCESS_TOKEN` just like the other providers.
 
 `POST /api/review` takes JSON `{hasAudio:boolean,hasVideo:boolean,bpm:number,syllableCount:integer,beatConfidence:number,note:string}`. The note is limited to 500 characters; the body to 16 KB. Authentication is either `X-App-Token` for the shared TypeSafe key or `Authorization: Bearer PERSONAL_TYPESAFE_KEY`. It calls the fixed TypeSafe `/v1/systemone` endpoint with a bounded typed choice and returns `{action,suggestion,model}`. The app never sends media or lyric text to JEV, and a suggestion does not alter timing. See [verification and cost scope](../docs/AI-AND-SECRETS.md).
+
+## Optional MP3 / MP4 downloads
+
+The Docker image includes [yt-dlp](https://github.com/yt-dlp/yt-dlp), its bundled EJS dependency, Node as the JavaScript runtime, and FFmpeg. Enable the feature in the backend host's **Environment** with `ENABLE_YOUTUBE_DOWNLOADS=true` and a random `APP_ACCESS_TOKEN`. No OpenAI or YouTube API key is required. Set `ALLOWED_ORIGINS=https://luckwei.github.io` for the Pages frontend. The app's **download → Connect backend** opens fields for the backend URL and token.
+
+For a local installation, install FFmpeg, then run:
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r server/requirements-downloader.txt
+# In your ignored .env file, set:
+# YT_DLP_PATH=/absolute/path/to/project/.venv/bin/yt-dlp
+# ENABLE_YOUTUBE_DOWNLOADS=true
+# APP_ACCESS_TOKEN=your-random-token
+node --env-file=.env server/server.mjs
+```
+
+`POST /api/youtube-download` takes JSON `{"id":"v1t4MTqdfyI","format":"mp3"}` (or `mp4`) with `X-App-Token`. It returns media bytes as an attachment. MP3 uses 192 kbps; MP4 selects compatible H.264/AAC up to 720p when available. Only single, non-live videos of at most 30 minutes are accepted; final files are limited to 250 MiB, temporary files to 500 MiB, and a job to five minutes. Existing request/concurrency limits also apply. Temporary files are deleted after transfer, cancellation, or failure. A hard container termination may leave temporary files until the container's ephemeral disk is recycled. Provision disk for two concurrent jobs and bandwidth for transfers.
+
+Use **Prepare download**, then **Save file** or **Use in session**. The browser retains only the latest prepared file in memory until another download or the page closes. Download only media you own or are permitted to save. No login-cookie upload, account restriction bypass, or DRM handling is implemented. YouTube may reject datacenter IPs or change its extraction requirements; keep the pinned yt-dlp dependency current and rebuild when necessary. Downloads are not guaranteed for every video. API/process and UI tests use fixtures; live availability must be checked on the chosen backend host.
+
+GitHub Pages and GitHub Actions secrets cannot run this service. A deployed backend with these runtime environment variables is required; do not put the app token in public frontend code or a `VITE_*` setting.

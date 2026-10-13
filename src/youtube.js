@@ -249,15 +249,17 @@ export function mountYouTube(container, { onSelect = () => {}, onError = () => {
   const fail = message => { status.textContent = message; onError(message); };
   const player = new YouTubePlayer(playerHost, { onError: fail, onStateChange });
 
-  async function load(video) {
+  async function load(video, { isCurrent = () => true } = {}) {
     const id = parseYouTubeId(typeof video === 'string' ? video : video?.id);
     if (!id) { fail('Paste a valid YouTube video link, such as youtube.com/watch?v=… or youtu.be/….'); return false; }
     const sequence = ++loadSequence;
+    pasteInput.value = `https://www.youtube.com/watch?v=${id}`;
     status.textContent = 'Loading YouTube player…';
     playerHost.hidden = false;
     try {
       const loaded = await player.load(id);
       if (!loaded || destroyed || sequence !== loadSequence) return false;
+      if (!isCurrent()) { status.textContent = ''; return false; }
       const title = typeof video === 'object' ? video.title || 'YouTube video' : 'YouTube video';
       selectedTitle.textContent = title;
       pasteInput.value = `https://www.youtube.com/watch?v=${id}`;
@@ -266,7 +268,7 @@ export function mountYouTube(container, { onSelect = () => {}, onError = () => {
       onSelect({ id, title });
       return true;
     } catch (error) {
-      if (!destroyed && sequence === loadSequence) fail(error.message);
+      if (!destroyed && sequence === loadSequence && isCurrent()) fail(error.message);
       return false;
     }
   }

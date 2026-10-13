@@ -19,11 +19,11 @@ try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}});page.on('pageerror',error=>errors.push(error.message));page.on('dialog',dialog=>dialog.accept());
  // Simulate the official IFrame API, including metadata that is unavailable
  // until first playback. This verifies app integration, not live YouTube access.
- await page.addInitScript(()=>{
+ const youtubeMock=()=>{
   window.YT={Player:class{
-   constructor(host,options){this.events=options.events;this.state=5;this.time=0;this.at=performance.now();this.duration=0;this.rate=1;this.volume=100;window.testYoutube=this;queueMicrotask(()=>this.events.onReady());}
+   constructor(host,options){this.events=options.events;this.state=5;this.time=0;this.at=performance.now();this.duration=0;this.rate=1;this.volume=100;window.testYoutube=this;if(window.deferYoutubeReady)window.finishYoutubeReady=()=>this.events.onReady();else queueMicrotask(()=>this.events.onReady());}
    emit(state){this.time=this.getCurrentTime();this.at=performance.now();this.state=state;this.events.onStateChange({data:state});}
-   cueVideoById(){this.time=0;this.duration=0;this.emit(5);}
+   cueVideoById(id){this.id=id;this.time=0;this.duration=0;this.emit(5);}
    getPlayerState(){return this.state;}
    getCurrentTime(){return this.time+(this.state===1?(performance.now()-this.at)/1000*this.rate:0);}
    getDuration(){return this.duration;}
@@ -35,8 +35,9 @@ try{
    pauseVideo(){this.emit(2);}
    destroy(){}
   }};
- });
- await page.goto(base);await page.locator('[aria-label="YouTube video link"]').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');await page.getByRole('button',{name:'Load video',exact:true}).click();
+ };
+ await page.addInitScript(youtubeMock);
+ await page.goto(base);await page.waitForFunction(()=>window.testYoutube?.id==='v1t4MTqdfyI'&&!document.querySelector('#play').disabled);assert.notEqual(await page.evaluate(()=>testYoutube.state),1,'Default video must not autoplay');await page.locator('[aria-label="YouTube video link"]').fill('https://www.youtube.com/watch?v=dQw4w9WgXcQ');await page.getByRole('button',{name:'Load video',exact:true}).click();
  await page.waitForFunction(()=>!document.querySelector('#play').disabled);assert.equal(await page.locator('#duration').innerText(),'0:00');
  await page.locator('#play').click();await page.waitForSelector('.phrase');await page.waitForTimeout(650);await page.locator('#play').click();
  assert.equal(await page.locator('#duration').innerText(),'0:12');assert.ok(Number(await page.locator('#seek').inputValue())>.3);assert.equal(await page.locator('#sound-source').inputValue(),'video');assert.equal(await page.evaluate(()=>testYoutube.volume),100);assert.equal(await page.locator('#transcribe').isDisabled(),true);
@@ -51,7 +52,19 @@ try{
  await page.locator('#sound-source').selectOption('mix');assert.equal(await page.evaluate(()=>testYoutube.volume),50);
  await page.locator('#remove-audio').click();assert.equal(await page.locator('.syllable').count(),cueCount);assert.equal(await page.evaluate(()=>testYoutube.volume),100);assert.equal(await page.locator('#transcribe').isDisabled(),true);
  await page.setViewportSize({width:390,height:844});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await page.locator('.download-tools > summary').click();await page.locator('#download-start').click();assert.match(await page.locator('#download-status').innerText(),/app access token/);
+ await page.locator('#backend-token').fill('test-download-token');
+ await page.route('**/api/youtube-download',route=>{assert.equal(route.request().headers()['x-app-token'],'test-download-token');assert.equal(route.request().postDataJSON().format,'mp3');return route.fulfill({contentType:'audio/mpeg',body:wav});});
+ await page.locator('#download-start').click();await page.locator('#download-ready').waitFor({state:'visible'});
+ const saved=page.waitForEvent('download');await page.locator('#download-save').click();assert.match((await saved).suggestedFilename(),/\.mp3$/);
+ await page.locator('#download-use').click();await page.waitForFunction(()=>!document.querySelector('#remove-audio').hidden);assert.ok((await page.locator('.waveform path').first().getAttribute('d')).length>20);assert.equal(await page.locator('.syllable').count(),cueCount);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ console.log('PASS: default video cues without autoplay; downloader requires setup, saves a fixture, and imports audio without losing timing (mock service).');
  console.log('PASS: YouTube-only transport with late metadata, native soundtrack, manual lyrics, looping, buffering, speed, optional audio attachment/removal without losing edits, source selection, and mobile width (mock IFrame API).');
+ const late=await browser.newPage();late.on('pageerror',error=>errors.push(error.message));late.on('dialog',dialog=>dialog.accept());await late.addInitScript(()=>window.deferYoutubeReady=true);await late.addInitScript(youtubeMock);await late.goto(base);
+ await late.waitForFunction(()=>window.finishYoutubeReady);await late.locator('#audio-file').setInputFiles(song);await late.waitForSelector('.phrase');await late.evaluate(()=>window.finishYoutubeReady());await late.waitForFunction(()=>window.testYoutube.id==='v1t4MTqdfyI');
+ assert.match(await late.locator('#track-detail').innerText(),/follows uploaded audio/);assert.equal(await late.locator('#sound-source').inputValue(),'audio');await late.close();
+ console.log('PASS: a user upload takes priority over a late default YouTube load.');
  const video=join(dir,'soundtrack.mp4');const encoded=spawnSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','color=c=0x718060:s=320x180:r=15','-i',song,'-map','0:v','-map','1:a','-t','12','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac',video]);
  if(encoded.status===0){
   const local=await browser.newPage();local.on('pageerror',error=>errors.push(error.message));local.on('dialog',dialog=>dialog.accept());await local.goto(base);await local.locator('#video-file').setInputFiles(video);

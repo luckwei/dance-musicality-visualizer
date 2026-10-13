@@ -291,3 +291,10 @@ dialog::backdrop { background: #151618aa; backdrop-filter: blur(4px); }
 }
 #remove-audio { margin-left: auto; font-size: 10px; flex-shrink: 0; }
 @media (max-width: 480px) { #remove-audio { max-width: 85px; font-size: 9px; line-height: 1.7; } }
+
+.download-tools { margin-top: 18px; }
+.download-label { display: block; font-size: 10px; color: var(--muted); margin-top: 14px; }
+.download-label input, .download-label select { width: 100%; margin-top: 7px; font-size: 11px; }
+.download-actions, #download-ready { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.download-tools .button, #download-settings { font-size: 10px; }
+#download-settings { margin-top: 12px; }

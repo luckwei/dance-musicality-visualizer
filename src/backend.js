@@ -3,7 +3,7 @@ export function backendURL(base, path) {
   if (url.username || url.password || url.search || url.hash || (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost','127.0.0.1','[::1]'].includes(url.hostname)))) throw new Error('Use an HTTPS backend address, or HTTP on localhost for development.');
   return new URL(path, url.origin).href;
 }
-export async function backendRequest(base, path, { token = '', key = '', body, signal, method = 'GET', headers = {} } = {}) {
+export async function backendRequest(base, path, { token = '', key = '', body, signal, method = 'GET', headers = {}, responseType = 'json' } = {}) {
   const requestHeaders = {...headers};
   token=token.trim();key=key.trim();
   if(token)requestHeaders['X-App-Token']=token;
@@ -11,7 +11,8 @@ export async function backendRequest(base, path, { token = '', key = '', body, s
   let response;
   try { response = await fetch(backendURL(base,path), {method,body,signal,headers:requestHeaders,credentials:'omit'}); }
   catch(error){if(error.name==='AbortError')throw error;throw new Error('Cannot reach the backend. Check its address and allowed origins.');}
+  if(response.ok && responseType==='blob')return response.blob();
   const data=await response.json().catch(()=>({}));
-  if(!response.ok)throw new Error(typeof data.error==='string'?data.error:`Backend returned ${response.status}.`);
+  if(!response.ok)throw new Error(typeof data.error==='string'?data.error:response.status===404?'Backend endpoint not found. Set your deployed backend URL in Connections.':`Backend returned ${response.status}.`);
   return data;
 }

@@ -82,3 +82,9 @@ Or set `BROWSER_PATH` to an installed Chromium executable. The suite uses real s
 Select **Settings → Pages → GitHub Actions** once. The workflow tests, builds and deploys on pushes to `main`. It can also run manually from Actions.
 
 GitHub Pages is static hosting. **Do not place API keys in Pages build variables or `VITE_*` values.** Deploy the optional backend separately, put keys in that service's secret environment settings, and enter its URL in **AI & API connections**.
+
+## Default video and downloads
+
+The app cues `https://www.youtube.com/watch?v=v1t4MTqdfyI` on startup, without autoplay. A user upload or a different video selected while it loads takes priority.
+
+Expand **download** below the video to prepare MP3 audio or MP4 video, save it, or use it as a local source for analysis. This requires the optional yt-dlp/FFmpeg backend; the embedded player itself still does not expose audio samples. See [download setup](server/README.md#optional-mp3--mp4-downloads). No AI key is needed, but a running backend and its app access token are required. Live downloads depend on YouTube and the hosting provider.
