@@ -214,7 +214,6 @@ function element(tag, className, text) {
 
 export function mountYouTube(container, { onSelect = () => {}, onError = () => {}, onStateChange = () => {}, searchProvider } = {}) {
   const root = element('div', 'youtube-panel');
-  const hint = element('p', 'helper', 'Search or paste a YouTube video. Its own audio is enough to play, count, loop, and time lyrics. A separate audio file is optional for waveform analysis and automatic transcription.');
   const keyDetails = element('details', 'youtube-key');
   const keySummary = element('summary', '', 'Set up YouTube search');
   const keyLabel = element('label', 'field-label', 'YouTube Data API key');
@@ -242,7 +241,9 @@ export function mountYouTube(container, { onSelect = () => {}, onError = () => {
   const selectedTitle = element('p', 'youtube-selected');
   const playerHost = element('div', 'youtube-player'); playerHost.hidden = true;
   const watchLink = element('a', 'text-button', 'Open selected video on YouTube ↗'); watchLink.target = '_blank'; watchLink.rel = 'noopener noreferrer'; watchLink.hidden = true;
-  root.append(hint, keyDetails, searchForm, externalLink, pasteForm, status, results, selectedTitle, playerHost, watchLink);
+  const searchDetails = element('details', 'youtube-discovery');
+  searchDetails.append(element('summary', '', 'search for a video'), searchForm, externalLink, keyDetails);
+  root.append(pasteForm, searchDetails, status, results, selectedTitle, playerHost, watchLink);
   container.replaceChildren(root);
   let searchController, searchSequence = 0, loadSequence = 0, destroyed = false;
   const fail = message => { status.textContent = message; onError(message); };

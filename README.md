@@ -12,6 +12,8 @@ A browser music-and-choreography workspace. Each eight-count phrase has one shar
 
 All modes share the same project; switching modes preserves timing and playback position.
 
+The interface uses a minimal charcoal theme, monospace type, and a yellow playhead. Timing, lyrics, search, alignment, and API settings expand when needed. Use **lyrics ↓** to open the lyric editor, **Correct** for tempo corrections, or **Align** for synchronization controls.
+
 ## Start with video, audio, or both
 
 A separate audio file is optional. **Use a video** accepts a YouTube link/search result or an uploaded MP4/WebM. **Add audio (optional)** supports audio-only projects or a companion/fallback track.

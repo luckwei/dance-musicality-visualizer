@@ -27,6 +27,7 @@ try{
  const points=await page.locator('.phrase').first().locator('.count-tick').evaluateAll(nodes=>nodes.map(node=>node.getBoundingClientRect().x));
  const spacing=points[1]-points[0];points.slice(1).forEach((point,i)=>assert.ok(Math.abs(point-points[i]-spacing)<.2));
  await page.locator('#play').click();await page.waitForTimeout(650);await page.locator('#play').click();assert.ok(Number(await page.locator('#seek').inputValue())>.3);
+ await page.locator('#timing-tools > summary').click();await page.locator('#jump-lyrics').click();
  await page.locator('#lyrics-text').fill('0.2-3.5 | you de-cide who\n4-7.5 | lights up the room\n8-11.8 | keep on dan-cing');
  await page.locator('#place-lyrics').click();await page.locator('#review-dialog').waitFor({state:'visible'});assert.equal(await page.locator('.syllable').count(),0);
  await page.locator('#apply-suggestion').click();assert.ok(await page.locator('.syllable').count()>10);const count=await page.locator('.syllable').count();
@@ -45,6 +46,7 @@ try{
  const video=join(artifacts,'test-video.mp4');const ffmpeg=spawnSync('ffmpeg',['-hide_banner','-loglevel','error','-y','-f','lavfi','-i','color=c=0x718060:s=320x180:r=15','-i',song,'-filter_complex','[1:a]adelay=2400[a]','-map','0:v','-map','[a]','-t','15','-c:v','libx264','-pix_fmt','yuv420p','-c:a','aac',video]);
  if(ffmpeg.status===0){
   await page.locator('#video-file').setInputFiles(video);await page.waitForFunction(()=>document.querySelector('#choreography').readyState>=1);
+  if(!await page.locator('#alignment-tools').evaluate(el=>el.open))await page.locator('#alignment-tools > summary').click();
   await page.locator('#link-playback').uncheck();await page.locator('#choreography').evaluate(video=>video.currentTime=5);await page.waitForTimeout(850);assert.ok(Math.abs(await page.locator('#choreography').evaluate(video=>video.currentTime)-5)<.1);
   await page.locator('#align-here').click();await page.locator('#link-playback').check();
   await page.locator('#align-video').click();await page.waitForFunction(()=>document.querySelector('#alignment-status').textContent.includes('Aligned')||document.querySelector('#alignment-status').textContent.includes('No confident')||document.querySelector('#alignment-status').textContent.includes('Could not'));
